@@ -1,0 +1,174 @@
+name: Push Notification with Claude Summary
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  summarize-and-notify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 全履歴を取得して差分を正確に取得
+
+    #   - name: Get commit info
+    #     id: commit_info
+    #     run: |
+    #       # コミットメッセージを取得
+    #       COMMIT_MESSAGE=$(git log -1 --pretty=format:"%s")
+    #       echo "commit_message=$COMMIT_MESSAGE" >> $GITHUB_OUTPUT
+          
+    #       # コミットハッシュを取得
+    #       COMMIT_SHA=$(git rev-parse --short HEAD)
+    #       echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
+          
+    #       # 差分を取得
+    #       echo "diff<<EOF" >> $GITHUB_OUTPUT
+    #       git diff HEAD^ HEAD >> $GITHUB_OUTPUT
+    #       echo "EOF" >> $GITHUB_OUTPUT
+
+    #   - name: Run Claude analysis
+    #     id: claude
+    #     uses: anthropics/claude-code-base-action@beta
+    #     with:
+    #       anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+    #       prompt: |
+    #         このコミットによる変更を簡潔に要約してください。
+            
+    #         以下の点に注意してください：
+    #         - 「コミット XXX の変更内容要約:」のようなタイトルは不要です
+    #         - 変更行数（XX行追加、XX行削除）の情報は不要です
+    #         - 実際の機能や動作の変更に焦点を当ててください
+    #         - 技術的な変更の意図や効果を説明してください
+    #         - 箇条書きで簡潔に記述してください
+            
+    #         コミットメッセージ: ${{ steps.commit_info.outputs.commit_message }}
+            
+    #         変更内容:
+    #         ```diff
+    #         ${{ steps.commit_info.outputs.diff }}
+    #         ```
+
+    #   - name: Extract Claude response
+    #     id: extract_response
+    #     if: steps.claude.outputs.conclusion == 'success'
+    #     uses: actions/github-script@v7
+    #     with:
+    #       script: |
+    #         const fs = require('fs');
+    #         const executionFile = '${{ steps.claude.outputs.execution_file }}';
+            
+    #         try {
+    #           const fileContent = fs.readFileSync(executionFile, 'utf8');
+    #           const executionLog = JSON.parse(fileContent);
+              
+    #           // 配列形式のログから結果を探す
+    #           const resultEntry = executionLog.find(entry => entry.type === 'result' && entry.subtype === 'success');
+              
+    #           if (resultEntry && resultEntry.result) {
+    #             // resultフィールドから要約を取得
+    #             const summary = resultEntry.result;
+                
+    #             // Slack用に改行をエスケープ
+    #             const escapedSummary = summary.replace(/\n/g, '\\n');
+    #             core.setOutput('summary', escapedSummary);
+    #           } else {
+    #             // resultがない場合は最後のassistantメッセージを探す
+    #             const assistantEntries = executionLog.filter(entry => 
+    #               entry.type === 'assistant' && 
+    #               entry.message?.role === 'assistant' &&
+    #               entry.message?.content
+    #             );
+                
+    #             if (assistantEntries.length > 0) {
+    #               const lastAssistant = assistantEntries[assistantEntries.length - 1];
+    #               const content = lastAssistant.message.content;
+                  
+    #               let summary = '';
+    #               if (Array.isArray(content)) {
+    #                 // tool_useではなくtextを探す
+    #                 const textContent = content.find(c => c.type === 'text');
+    #                 if (textContent) {
+    #                   summary = textContent.text;
+    #                 }
+    #               } else if (typeof content === 'string') {
+    #                 summary = content;
+    #               }
+                  
+    #               if (summary) {
+    #                 const escapedSummary = summary.replace(/\n/g, '\\n');
+    #                 core.setOutput('summary', escapedSummary);
+    #               } else {
+    #                 core.setOutput('summary', '要約の生成に失敗しました（テキストコンテンツが見つかりません）');
+    #               }
+    #             } else {
+    #               core.setOutput('summary', '要約の生成に失敗しました（アシスタントメッセージが見つかりません）');
+    #             }
+    #           }
+    #         } catch (error) {
+    #           console.error('Error processing Claude response:', error);
+    #           core.setOutput('summary', `要約の生成に失敗しました: ${error.message}`);
+    #         }
+
+    #   - name: Send to Slack
+    #     env:
+    #       SLACK_URL: ${{ secrets.SLACK_URL }}
+    #     run: |
+    #       # Slack通知のペイロードを作成
+    #       curl -X POST $SLACK_URL \
+    #         -H 'Content-type: application/json' \
+    #         -d "{
+    #           \"text\": \"🚀 mainブランチに新しいプッシュがありました\",
+    #           \"blocks\": [
+    #             {
+    #               \"type\": \"header\",
+    #               \"text\": {
+    #                 \"type\": \"plain_text\",
+    #                 \"text\": \"📝 コード変更通知\"
+    #               }
+    #             },
+    #             {
+    #               \"type\": \"section\",
+    #               \"fields\": [
+    #                 {
+    #                   \"type\": \"mrkdwn\",
+    #                   \"text\": \"*リポジトリ:*\n${{ github.repository }}\"
+    #                 },
+    #                 {
+    #                   \"type\": \"mrkdwn\",
+    #                   \"text\": \"*コミット:*\n<${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ steps.commit_info.outputs.commit_sha }}>\"
+    #                 }
+    #               ]
+    #             },
+    #             {
+    #               \"type\": \"section\",
+    #               \"text\": {
+    #                 \"type\": \"mrkdwn\",
+    #                 \"text\": \"*コミットメッセージ:*\n${{ steps.commit_info.outputs.commit_message }}\"
+    #               }
+    #             },
+    #             {
+    #               \"type\": \"divider\"
+    #             },
+    #             {
+    #               \"type\": \"section\",
+    #               \"text\": {
+    #                 \"type\": \"mrkdwn\",
+    #                 \"text\": \"*🤖 Claudeによる変更内容の要約:*\n${{ steps.extract_response.outputs.summary }}\"
+    #               }
+    #             },
+    #             {
+    #               \"type\": \"section\",
+    #               \"text\": {
+    #                 \"type\": \"mrkdwn\",
+    #                 \"text\": \"*実行者:*\n${{ github.actor }}\"
+    #               }
+    #             }
+    #           ]
+    #         }"
