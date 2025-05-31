@@ -1,0 +1,85 @@
+name: Notify Target Directory Changes
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  notify-changes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files in target directory
+        id: changed-files
+        run: |
+          # 前のコミットとの差分を取得（targetディレクトリのみ）
+          changed_files=$(git diff --name-only HEAD^ HEAD | grep '^target/' || true)
+          
+          if [ -z "$changed_files" ]; then
+            echo "No changes in target directory"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "Changed files in target directory:"
+            echo "$changed_files"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            
+            # 改行を\\nに変換してJSON用にエスケープ
+            escaped_files=$(echo "$changed_files" | sed ':a;N;$!ba;s/\n/\\n/g' | sed 's/"/\\"/g')
+            echo "files=$escaped_files" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send Slack notification
+        if: steps.changed-files.outputs.has_changes == 'true'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          # 変更されたファイルのリストを整形
+          files="${{ steps.changed-files.outputs.files }}"
+          
+          # Slackメッセージを作成
+          payload=$(cat <<EOF
+          {
+            "text": "🚀 targetディレクトリに変更がありました",
+            "blocks": [
+              {
+                "type": "header",
+                "text": {
+                  "type": "plain_text",
+                  "text": "📁 Target Directory Changes"
+                }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*Repository:* ${{ github.repository }}\n*Branch:* ${{ github.ref_name }}\n*Commit:* <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>"
+                }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*Changed Files:*\n\`\`\`\n$files\n\`\`\`"
+                }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*Pusher:* ${{ github.actor }}"
+                }
+              }
+            ]
+          }
+          EOF
+          )
+          
+          # Slackに送信
+          curl -X POST -H 'Content-type: application/json' \
+            --data "$payload" \
+            "$SLACK_WEBHOOK_URL"
