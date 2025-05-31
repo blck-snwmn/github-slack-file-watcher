@@ -1,0 +1,20 @@
+Sample Data File
+================
+
+This is a test file for GitHub Actions workflow testing.
+
+Current timestamp: 2025-06-01
+Purpose: Verify that file changes in the target directory trigger Slack notifications
+
+Test Data:
+- Item 1: Alpha
+- Item 2: Beta
+- Item 3: Gamma
+
+Configuration Values:
+KEY_A=123
+KEY_B=456
+KEY_C=789
+
+Status: Active
+Version: 1.0.0
