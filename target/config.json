@@ -1,0 +1,16 @@
+{
+  "database": {
+    "host": "localhost",
+    "port": 5432,
+    "name": "testdb"
+  },
+  "server": {
+    "port": 8080,
+    "timeout": 30
+  },
+  "features": {
+    "cache": true,
+    "logging": true,
+    "metrics": false
+  }
+}
